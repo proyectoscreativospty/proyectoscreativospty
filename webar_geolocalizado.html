@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Experiencia WebAR Geolocalizada</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
+    <script src="https://raw.githack.com/donmccurdy/aframe-extras/master/dist/aframe-extras.loaders.min.js"></script>
+
+    <style>
+        /* Estilos generales y de la pantalla de inicio */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            font-family: sans-serif;
+        }
+
+        .splash-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        .logo {
+            max-width: 50%;
+            max-height: 50%;
+        }
+
+        /* Contenedor principal de la experiencia AR */
+        #ar-experience {
+            /* Oculto por defecto, se mostrará con JavaScript */
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Contenedor para los botones */
+        .ui-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            margin: 0 10px;
+            cursor: pointer;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: 1px solid white;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="splash-screen" class="splash-container">
+        <img src="assets/images/logo.png" alt="logo" class="logo">
+    </div>
+
+    <div id="ar-experience">
+        <a-scene
+            vr-mode-ui="enabled: false"
+            arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
+            renderer="antialias: true; alpha: true"
+            embedded
+        >
+            <a-camera gps-camera rotation-reader></a-camera>
+        </a-scene>
+
+        <div class="ui-container">
+            <button id="record-button">Grabar</button>
+            <button id="close-button">Cerrar</button>
+        </div>
+    </div>
+
+    <script>
+        window.onload = () => {
+            // --- LÓGICA DE LA PANTALLA DE INICIO ---
+            const splashScreen = document.getElementById('splash-screen');
+            const arExperience = document.getElementById('ar-experience');
+
+            setTimeout(() => {
+                splashScreen.style.display = 'none';
+                arExperience.style.display = 'block';
+            }, 6000); // Muestra la experiencia AR después de 6 segundos
+
+            // --- LÓGICA DE LA EXPERIENCIA AR ---
+            const scene = document.querySelector('a-scene');
+
+            // 1. DEFINE TUS OBJETOS 3D Y SUS GEOLOCALIZACIONES
+            // ¡¡¡IMPORTANTE!!! CAMBIA ESTOS DATOS POR LOS TUYOS
+            const objects = [
+                {
+                    model: 'assets/models/alberto.glb',
+                    sound: 'assets/sounds/sound1.mp3',
+                    latitude: 9.079638, // Ejemplo: Latitud en Panamá
+                    longitude: -79.399452, // Ejemplo: Longitud en Panamá
+                    animation: 'animation-name-1'
+                },
+                {
+                    model: 'assets/models/mamut.glb',
+                    sound: 'assets/sounds/sound2.mp3',
+                    latitude: 9.079608,
+                    longitude: -79.399464,
+                    animation: 'animation-name-2'
+                },
+                // Añade hasta 8 objetos aquí
+            ];
+
+            const promotionUrl = 'https://www.youtube.com/your-promotion-video'; // URL de tu video de YouTube
+            const interactionRadius = 50; // en metros
+
+            // 2. LÓGICA DE GEOLOCALIZACIÓN Y GEOFENCING
+            const startAR = (position) => {
+                const { latitude, longitude } = position.coords;
+
+                objects.forEach(obj => {
+                    const distance = getDistance(latitude, longitude, obj.latitude, obj.longitude);
+                    if (distance <= interactionRadius) {
+                        renderObject(obj);
+                    }
+                });
+
+                navigator.geolocation.watchPosition((newPosition) => {
+                    const { latitude: newLat, longitude: newLon } = newPosition.coords;
+                    let inRange = false;
+                    objects.forEach(obj => {
+                        const newDistance = getDistance(newLat, newLon, obj.latitude, obj.longitude);
+                        const entity = document.querySelector(`[gps-entity-place="latitude: ${obj.latitude}; longitude: ${obj.longitude};"]`);
+                       
+                        if (newDistance <= interactionRadius) {
+                            if (!entity) { // Si no existe, créalo
+                                renderObject(obj);
+                            }
+                            inRange = true;
+                        } else {
+                            if (entity) { // Si existe, remuévelo
+                                scene.removeChild(entity);
+                            }
+                        }
+                    });
+
+                    if (!inRange) {
+                        window.location.href = promotionUrl;
+                    }
+                });
+            };
+
+            const handleLocationError = (err) => {
+                console.error('Error al obtener la geolocalización:', err);
+                alert('No se pudo obtener tu ubicación. Por favor, activa los servicios de localización y refresca la página.');
+            };
+
+            navigator.geolocation.getCurrentPosition(startAR, handleLocationError, {
+                enableHighAccuracy: true
+            });
+
+            function renderObject(obj) {
+                const entity = document.createElement('a-entity');
+                entity.setAttribute('gps-entity-place', `latitude: ${obj.latitude}; longitude: ${obj.longitude};`);
+                entity.setAttribute('gltf-model', obj.model);
+                entity.setAttribute('scale', '0.5 0.5 0.5'); // Ajusta la escala según sea necesario
+                entity.setAttribute('sound', `src: url(${obj.sound}); autoplay: true; loop: true`);
+                if (obj.animation) {
+                    entity.setAttribute('animation-mixer', `clip: ${obj.animation}`);
+                }
+                scene.appendChild(entity);
+            }
+
+            function getDistance(lat1, lon1, lat2, lon2) {
+                const R = 6371e3; // metres
+                const φ1 = lat1 * Math.PI / 180;
+                const φ2 = lat2 * Math.PI / 180;
+                const Δφ = (lat2 - lat1) * Math.PI / 180;
+                const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+                const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                          Math.cos(φ1) * Math.cos(φ2) *
+                          Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+                return R * c;
+            }
+
+            // 3. INTERFAZ DE USUARIO Y GRABACIÓN
+            const recordButton = document.getElementById('record-button');
+            const closeButton = document.getElementById('close-button');
+            let mediaRecorder;
+            let recordedChunks = [];
+
+            recordButton.addEventListener('click', () => {
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop();
+                    recordButton.textContent = 'Grabar';
+                } else {
+                    const stream = document.querySelector('a-scene').canvas.captureStream(30);
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp8' });
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            recordedChunks.push(event.data);
+                        }
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        a.download = 'experiencia-webar.webm';
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        recordedChunks = [];
+                    };
+
+                    mediaRecorder.start();
+                    recordButton.textContent = 'Detener';
+                }
+            });
+
+            closeButton.addEventListener('click', () => {
+                window.location.href = 'about:blank';
+            });
+        };
+    </script>
+</body>
+</html>
